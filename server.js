@@ -724,6 +724,7 @@ app.post("/v1/chat/completions", async (req, reply) => {
       return reply.code(response.status).send({ error: "上游 API 没有返回可读取的响应体" });
     }
 
+    reply.hijack();
     reply.raw.writeHead(response.status, {
       "Content-Type": upstreamContentType || "text/event-stream",
       "Cache-Control": "no-cache",
@@ -738,9 +739,17 @@ app.post("/v1/chat/completions", async (req, reply) => {
     }
     reply.raw.end();
   } catch (err) {
-    console.error(err);
-    reply.code(500).send({ error: err.message });
+  console.error(err);
+
+  if (reply.raw.headersSent || reply.sent) {
+    if (!reply.raw.destroyed && !reply.raw.writableEnded) {
+      reply.raw.end();
+    }
+    return;
   }
+
+  return reply.code(500).send({ error: err.message });
+}
 });
 
 // ========================
